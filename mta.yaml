@@ -1,0 +1,65 @@
+---
+_schema-version: '3.1'
+ID: demoCAP
+version: 1.0.0
+description: "A simple CAP project."
+parameters:
+  enable-parallel-deployments: true
+
+build-parameters:
+  before-all:
+    - builder: custom
+      commands:
+      - npm install --production
+    # use cds-dbm for building, not cds
+      - npx cds-dbm build --production  
+
+modules:
+  # --------------------- SERVER MODULE ------------------------
+  - name: demoCAP-srv
+    # ------------------------------------------------------------
+    type: nodejs
+    path: gen/srv
+    provides:
+      - name: srv-api # required by consumers of CAP services (e.g. approuter)
+        properties:
+          srv-url: ${default-url}
+    parameters:
+      buildpack: nodejs_buildpack
+    build-parameters:
+      builder: npm-ci
+    requires:
+      - name: gCRAFT-postgreSQL
+
+
+  - name: demoCAP-db-deployer
+    type: custom
+    path: gen/db
+    parameters:
+      buildpacks: [https://github.com/cloudfoundry/apt-buildpack#v0.2.2, nodejs_buildpack] 
+      no-route: true
+      no-start: true
+      disk-quota: 2GB
+      memory: 512MB
+      tasks:
+      - name: deploy_to_postgresql
+        command: ./deploy.sh
+        disk-quota: 2GB
+        memory: 512MB
+    build-parameters:
+      ignore: ["node_modules/"]
+    requires:
+      - name: gCRAFT-postgreSQL
+
+   
+
+resources:
+  - name: gCRAFT-postgreSQL
+    parameters:
+      path: ./pg-options.json
+      service: postgresql-db
+      service-plan: free
+      skip-service-updates:
+        parameters: false
+    type: org.cloudfoundry.managed-service
+
